@@ -4,8 +4,8 @@
 #include <vector>
 #include <iostream>
 #include "spinlock.hpp"
-#include <stack>
-#include <assert.h>
+#include <deque>
+#include <cassert>
 
 std::random_device glbRnd;
 std::mt19937_64 randEngine;
@@ -19,6 +19,7 @@ namespace acp
 {
     struct JobEngine{
         static inline void yield() { std::this_thread::yield();}
+        static bool inside_jobengine() { return true; }
     };
 
     class refcounted
@@ -47,7 +48,7 @@ namespace acp
     {
         acp::ticket_spinlock<JE> wqLock;
         
-        std::stack<jq_synchro_base*> deps_on_me;
+        std::deque<jq_synchro_base*> deps_on_me;
         std::atomic<uint32_t> depCount;
         
         enum class state {
@@ -56,6 +57,8 @@ namespace acp
         };
 
         volatile state status;
+        std::mutex mutcv;
+        std::condition_variable cv;
 
         virtual void onRelease() { delete this; }
     public:
@@ -64,23 +67,25 @@ namespace acp
             depCount = 0;
             status = state::not_ready;
         }
+
         ~jq_synchro_base()
         {
             wait();
         }
 
-        void wait_for_my_deps()
+        void wait()
         {
-            while(deps_on_me.load(std::memory_order_acquire) != 0)
+            if(!JE::inside_jobengine())
+            {
+                std::unique_lock<std::mutex> l(mutcv);
+                cv.wait(l);
+                return;
+            }
+            while(depCount.load(std::memory_order_acquire) != 0 )
             {
                 JE::yield();
             }
-        }
-
-        void wait()
-        {
-            wait_for_my_deps();
-            while(status != state::ready)
+            while(depCount.load(std::memory_order_acquire) != 0 || status != state::ready)
             {
                 JE::yield();
             }
@@ -88,7 +93,15 @@ namespace acp
 
         void set_value()
         {
+            if(status != state::not_ready)
+            {
+                return;
+            }
+            
+            assert(depCount.load(std::memory_order_relaxed) == 0);
+
             wqLock.lock();
+            assert(status == state::not_ready);
             status = state::ready;
             for(auto & x:deps_on_me)
             {
@@ -97,6 +110,8 @@ namespace acp
             }
             deps_on_me.clear();
             wqLock.unlock();
+
+            cv.notify_all();
         }
 
         bool is_ready() 
@@ -106,6 +121,10 @@ namespace acp
 
         void add_dep_on_this(jq_synchro_base * x)
         {
+            if(status == state::ready)
+            {
+                return;
+            }
             x->add_ref();
 
             wqLock.lock();
@@ -115,7 +134,7 @@ namespace acp
                 x->release_ref();
                 return;
             }
-            deps_on_me.push(x);
+            deps_on_me.push_back(x);
             x->depCount++;
             wqLock.unlock();
         }

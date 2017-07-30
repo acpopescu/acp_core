@@ -6,6 +6,9 @@
         "thread": "cpp",
         "condition_variable": "cpp",
         "mutex": "cpp",
-        "atomic": "cpp"
+        "atomic": "cpp",
+        "stack": "cpp",
+        "deque": "cpp",
+        "cassert": "cpp"
     }
 }
