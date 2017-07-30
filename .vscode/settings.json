@@ -3,6 +3,9 @@
         "future": "cpp",
         "chrono": "cpp",
         "istream": "cpp",
-        "thread": "cpp"
+        "thread": "cpp",
+        "condition_variable": "cpp",
+        "mutex": "cpp",
+        "atomic": "cpp"
     }
 }

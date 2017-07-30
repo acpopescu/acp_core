@@ -1,65 +1,129 @@
 #include <stdio.h>
-#include <atomic>
 #include <future>
 #include <random>
 #include <vector>
 #include <iostream>
+#include "spinlock.hpp"
+#include <stack>
+#include <assert.h>
 
 std::random_device glbRnd;
 std::mt19937_64 randEngine;
 std::uniform_real_distribution<float> sleeping(0,10000);
 std::mutex mre;
 
-std::future<uint32_t> jobtest(uint32_t id)
+/*
+let's do a circular vector as a lf stack, locking only when we need to 
+*/
+namespace acp
 {
-    return std::async( std::launch::async, 
-        [=]() -> uint32_t {
-            float f;
+    struct JobEngine{
+        static inline void yield() { std::this_thread::yield();}
+    };
+
+    class refcounted
+    {
+    public:
+        refcounted():refcnt(0) {}
+
+        void add_ref() { refcnt++; }
+        void release_ref() 
+        {
+            uint32_t val = refcnt.fetch_sub(-1);
+            if(val == 1)
             {
-                std::lock_guard<std::mutex> lg(mre);
-                f = sleeping(randEngine);
+                this->onRelease();
             }
-            printf("async job %d - sleeping for %f ms\n", id, f);
-            std::this_thread::sleep_for(std::chrono::duration<float,std::milli>(f));
-            std::thread::id myId = std::this_thread::get_id();
-            std::cout << "async job " << id << " - " << myId << std::endl;
-            return id;
+
         }
-    );    
+        uint32_t get_refcnt() { return refcnt.load(std::memory_order_relaxed);}
+        virtual void onRelease() = 0;
+    private:
+        std::atomic<uint32_t> refcnt;
+    };
+
+    template<typename JE = JobEngine>
+    class jq_synchro_base: public refcounted
+    {
+        acp::ticket_spinlock<JE> wqLock;
+        
+        std::stack<jq_synchro_base*> deps_on_me;
+        std::atomic<uint32_t> depCount;
+        
+        enum class state {
+            not_ready,
+            ready
+        };
+
+        volatile state status;
+
+        virtual void onRelease() { delete this; }
+    public:
+        jq_synchro_base()
+        {
+            depCount = 0;
+            status = state::not_ready;
+        }
+        ~jq_synchro_base()
+        {
+            wait();
+        }
+
+        void wait_for_my_deps()
+        {
+            while(deps_on_me.load(std::memory_order_acquire) != 0)
+            {
+                JE::yield();
+            }
+        }
+
+        void wait()
+        {
+            wait_for_my_deps();
+            while(status != state::ready)
+            {
+                JE::yield();
+            }
+        }
+
+        void set_value()
+        {
+            wqLock.lock();
+            status = state::ready;
+            for(auto & x:deps_on_me)
+            {
+                x->depCount--;
+                x->release_ref();
+            }
+            deps_on_me.clear();
+            wqLock.unlock();
+        }
+
+        bool is_ready() 
+        {
+            return status == state::ready;
+        }
+
+        void add_dep_on_this(jq_synchro_base * x)
+        {
+            x->add_ref();
+
+            wqLock.lock();
+            if(status == state::ready)
+            {
+                wqLock.unlock();
+                x->release_ref();
+                return;
+            }
+            deps_on_me.push(x);
+            x->depCount++;
+            wqLock.unlock();
+        }
+    };
 }
 
 int main()
 {
-    uint32_t def = glbRnd();
-    
-    printf("Hello World of jobs!\n");
-    printf(" Default random device has max %d and min %d\n", glbRnd.min, glbRnd.max);
-    printf(" Seeding mersenne random number generator with %d\n", def);
-    randEngine.seed(def);
-
-    std::uniform_real_distribution<float> dis(0, 1);
-    printf(" 10 random numbers:\n");
-    for (uint32_t i = 0; i<10; i++)
-    {
-        printf(" %d > %7.5f\n", i, dis(randEngine));
-    }
-    
-    std::vector<std::future<uint32_t> > oplist;
-
-    for(uint32_t i = 0; i<10; i++)
-    {
-        oplist.push_back(jobtest(i));
-    }
-
-    std::this_thread::sleep_for( std::chrono::milliseconds((int64_t)sleeping(randEngine)) );
-    
-    printf("main done sleeping, waiting for the kids\n");
-    int cnt;
-    for( auto & x: oplist)
-    {
-        x.wait();
-        printf("Done waiting for %d\n", x.get());
-    }
-    
+    randEngine.seed(glbRnd());
     return 0;
 }

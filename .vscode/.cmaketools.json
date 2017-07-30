@@ -38,13 +38,35 @@
                 "name": "main",
                 "sourceDirectory": "/home/acp/dev/threadtest",
                 "type": "EXECUTABLE"
+              },
+              {
+                "artifacts": [
+                  "/home/acp/dev/threadtest/build/testjq"
+                ],
+                "buildDirectory": "/home/acp/dev/threadtest/build",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -pthread -g   -std=gnu++14",
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "testjq.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "testjq",
+                "linkLanguageFlags": "-pthread -g",
+                "linkerLanguage": "CXX",
+                "name": "testjq",
+                "sourceDirectory": "/home/acp/dev/threadtest",
+                "type": "EXECUTABLE"
               }
             ]
           }
         ]
       }
     ],
-    "cookie": "0.8524425506710303",
+    "cookie": "0.4086395051219116",
     "inReplyTo": "codemodel",
     "type": "reply"
   }
