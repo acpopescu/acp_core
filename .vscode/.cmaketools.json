@@ -1,0 +1,51 @@
+{
+  "variant": {
+    "label": "Debug",
+    "keywordSettings": {
+      "buildType": "debug"
+    },
+    "description": "Emit debug information without performing optimizations"
+  },
+  "activeEnvironments": [],
+  "codeModel": {
+    "configurations": [
+      {
+        "name": "Debug",
+        "projects": [
+          {
+            "buildDirectory": "/home/acp/dev/threadtest/build",
+            "name": "threadtst",
+            "sourceDirectory": "/home/acp/dev/threadtest",
+            "targets": [
+              {
+                "artifacts": [
+                  "/home/acp/dev/threadtest/build/main"
+                ],
+                "buildDirectory": "/home/acp/dev/threadtest/build",
+                "fileGroups": [
+                  {
+                    "compileFlags": " -pthread -g   -std=gnu++14",
+                    "isGenerated": false,
+                    "language": "CXX",
+                    "sources": [
+                      "main.cpp"
+                    ]
+                  }
+                ],
+                "fullName": "main",
+                "linkLanguageFlags": "-pthread -g",
+                "linkerLanguage": "CXX",
+                "name": "main",
+                "sourceDirectory": "/home/acp/dev/threadtest",
+                "type": "EXECUTABLE"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "cookie": "0.8524425506710303",
+    "inReplyTo": "codemodel",
+    "type": "reply"
+  }
+}
