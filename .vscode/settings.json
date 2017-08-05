@@ -9,6 +9,9 @@
         "atomic": "cpp",
         "stack": "cpp",
         "deque": "cpp",
-        "cassert": "cpp"
+        "cassert": "cpp",
+        "type_traits": "cpp",
+        "array": "cpp",
+        "string_view": "cpp"
     }
 }

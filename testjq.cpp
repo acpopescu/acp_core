@@ -7,6 +7,7 @@
 #include <deque>
 #include <cassert>
 
+
 std::random_device glbRnd;
 std::mt19937_64 randEngine;
 std::uniform_real_distribution<float> sleeping(0,10000);
@@ -43,6 +44,17 @@ namespace acp
         std::atomic<uint32_t> refcnt;
     };
 
+
+    class jq_work_set
+    {
+    public:
+        std::atomic<uint32_t> numReadyJobs;
+        std::atomic<uint32_t> concurrency;
+        std::vector<uint32_t> priority;
+
+
+    };
+
     template<typename JE = JobEngine>
     class jq_synchro_base: public refcounted
     {
@@ -50,7 +62,9 @@ namespace acp
         
         std::deque<jq_synchro_base*> deps_on_me;
         std::atomic<uint32_t> depCount;
+        std::shared_ptr<jq_work_set> workSetOwner;
         
+
         enum class state {
             not_ready,
             ready
@@ -90,6 +104,15 @@ namespace acp
                 JE::yield();
             }
         }
+        
+        void kick()
+        {
+            auto val = --depCount;
+            if(depCount == 0)
+            {
+                workSetOwner.numReadyJobs++;
+            }
+        }
 
         void set_value()
         {
@@ -105,7 +128,7 @@ namespace acp
             status = state::ready;
             for(auto & x:deps_on_me)
             {
-                x->depCount--;
+                x->kick();
                 x->release_ref();
             }
             deps_on_me.clear();
